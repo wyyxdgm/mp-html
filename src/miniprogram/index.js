@@ -299,18 +299,36 @@ Component({
       // #endif
 
       // 等待图片加载完毕
-      var height
-      clearInterval(this._timer)
-      this._timer = setInterval(() => {
-        this.getRect().then(rect => {
-          // 350ms 总高度无变化就触发 ready 事件
-          if (rect.height == height) {
-            this.triggerEvent('ready', rect)
-            clearInterval(this._timer)
-          }
-          height = rect.height
-        }).catch(() => { })
-      }, 350)
+      var regexs = [new RegExp(/src="([^"]*?)"/g), new RegExp(/url(['"]([^'"]*?)['"])/g)]
+      let imagesPromises = [];
+      regexs.forEach(regex => {
+        var matchResult = content.match(regex);
+        // console.log('parser.regex', s, regex, content)
+        if (matchResult) {
+          let srcArr = matchResult.map(str => str.replace(regex, '$1'));
+          imagesPromises = imagesPromises.concat(srcArr.map(src => new Promise((resolve, reject) => {
+            let img = new Image();
+            img.src = src;
+            img.onload = () => resolve(img);
+          })))
+        }
+      })
+      let localPromise = this.lastPromise = Promise.all(imagesPromises);
+      localPromise.then(ps => {
+        if (this.lastPromise !== localPromise) return; // 在新的Promise生成之前回调就算最新
+        var height
+        clearInterval(this._timer)
+        this._timer = setInterval(() => {
+          this.getRect().then(rect => {
+            // 350ms 总高度无变化就触发 ready 事件
+            if (rect.height == height) {
+              this.triggerEvent('ready', rect)
+              clearInterval(this._timer)
+            }
+            height = rect.height
+          }).catch(() => {})
+        }, 350)
+      })
     },
 
     /**
